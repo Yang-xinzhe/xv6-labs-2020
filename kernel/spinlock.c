@@ -16,7 +16,7 @@ void initlock(struct spinlock *lk, char *name) {
 
 // Acquire the lock.
 // Loops (spins) until the lock is acquired.
-void acquired(struct spinlock *lk) {
+void acquire(struct spinlock *lk) {
     push_off();
     if(holding(lk))
         panic("acquire");
@@ -36,6 +36,33 @@ void acquired(struct spinlock *lk) {
 
     // Record info about lock acquisition for holding() and debugging.
     lk->cpu = mycpu();
+}
+
+// Realease the lock
+void release(struct spinlock *lk) {
+    if(!holding(lk)) {
+        panic("release");
+    }
+    lk->cpu = 0;
+
+  // Tell the C compiler and the CPU to not move loads or stores
+  // past this point, to ensure that all the stores in the critical
+  // section are visible to other CPUs before the lock is released,
+  // and that loads in the critical section occur strictly before
+  // the lock is released.
+  // On RISC-V, this emits a fence instruction.
+  __sync_synchronize();
+
+  // Release the lock, equivalent to lk->locked = 0.
+  // This code doesn't use a C assignment, since the C standard
+  // implies that an assignment might be implemented with
+  // multiple store instructions.
+  // On RISC-V, sync_lock_release turns into an atomic swap:
+  //   s1 = &lk->locked
+  //   amoswap.w zero, zero, (s1)
+  __sync_lock_release(&lk->locked);
+
+  pop_off();
 }
 
 // Check whether this cpu is holding the lock
@@ -58,4 +85,16 @@ void push_off(void) {
         mycpu()->intena = old;
     }
     mycpu()->noff += 1;
+}
+
+void pop_off(void) {
+    struct cpu *c = mycpu();
+    if(intr_get())
+        panic("pop_off - interruptable");
+    if(c->noff < 1)
+        panic("pop_off");
+    c->noff -= 1;
+    if(c->noff == 0 && c->intena) {
+        intr_on();
+    }
 }
