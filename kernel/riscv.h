@@ -258,9 +258,7 @@ r_time()
 }
 
 // enable device interrupts
-static inline void
-intr_on()
-{
+static inline void intr_on() {
   w_sstatus(r_sstatus() | SSTATUS_SIE);
 }
 
@@ -272,9 +270,7 @@ intr_off()
 }
 
 // are device interrupts enabled?
-static inline int
-intr_get()
-{
+static inline int intr_get() {
   uint64 x = r_sstatus();
   return (x & SSTATUS_SIE) != 0;
 }
