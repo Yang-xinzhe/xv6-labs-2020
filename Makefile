@@ -3,7 +3,15 @@ K=kernel
 OBJS = \
 	$K/entry.o \
 	$K/start.o \
-	
+	$K/console.o \
+	$K/printf.o \
+	$K/uart.o \
+	$K/spinlock.o \
+	$K/main.o \
+	$K/proc.o \
+	$K/swtch.o \
+	$K/trap.o \
+	$K/kernelvec.o \
 
 
 TOOLPREFIX = riscv64-unknown-elf-
