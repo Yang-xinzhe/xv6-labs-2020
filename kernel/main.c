@@ -16,6 +16,8 @@ void main() {
         printf("Yangxinzhe kernel is booting in hart %d \n", cpuid());
         printf("\n");
         kinit();            // physical page allocator  
+        kvminit();          // create kernel page table
+        procinit();         // process table
         started = 1;     
     } else {
         while(started == 0)
