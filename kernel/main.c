@@ -18,6 +18,10 @@ void main() {
         kinit();            // physical page allocator  
         kvminit();          // create kernel page table
         procinit();         // process table
+        trapinit();         // trap vectors
+        trapinithart();     // install kernel trap vector
+        plicinit();         // set up interrupt controller
+        plicinithart();     // ask PLIC for device interrupts
         started = 1;     
     } else {
         while(started == 0)
