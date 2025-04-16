@@ -11,6 +11,7 @@ SECTIONS
         *(.text.init)
         *(.text .text.*)
     }
+    etext = .;
 
     .rodata : {
         *(.rodata .rodata.*)
