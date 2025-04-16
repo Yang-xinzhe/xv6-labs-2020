@@ -52,6 +52,13 @@ void            push_off(void);
 void            pop_off(void);
 
 
+// trap.c
+extern uint     ticks;
+void            trapinit(void);
+void            trapinithart(void);
+extern struct spinlock tickslock;
+void            usertrapret(void);
+
 // uart.c
 void            uartinit(void);
 void            uartputc(int);
@@ -85,3 +92,9 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+
+// plic.c
+void            plicinit(void);
+void            plicinithart(void);
+int             plic_claim(void);
+void            plic_complete(int);
