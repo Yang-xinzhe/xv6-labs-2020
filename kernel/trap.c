@@ -89,7 +89,7 @@ int devintr() {
         // interrupt at a time; tell the PLIC the devices is 
         // now allowed to interrupt again.
         if(irq)
-            plic_compelete(irq);
+            plic_complete(irq);
         return 1;
     } else if (scause == 0x8000000000000001L) {
         // software interrupt from a machine-mode timer interrupt,
