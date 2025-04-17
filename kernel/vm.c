@@ -222,7 +222,7 @@ uint64 uvmalloc(pagetable_t pagetable, uint64 oldsz, uint64 newsz) {
         }
         memset(mem, 0, PGSIZE);
         if(mappages(pagetable, a, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0) {
-            kree(mem);
+            kfree(mem);
             uvmdealloc(pagetable, a, oldsz);
             return 0;
         }
@@ -261,4 +261,12 @@ void freewalk(pagetable_t pagetable) {
         }
     }
     kfree((void*)pagetable);
+}
+
+// Free user memory pages,
+// then free page-table pages.
+void uvmfree(pagetable_t pagetable, uint64 sz) {
+    if(sz > 0)
+        uvmunmap(pagetable, 0, PGROUNDUP(sz)/PGSIZE, 1);
+    freewalk(pagetable);
 }
