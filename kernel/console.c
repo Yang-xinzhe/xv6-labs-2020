@@ -48,7 +48,42 @@ struct {
 } cons;
 
 
+//
+// user write()s to the console go here
+int consolewrite(int user_src, uint64 src, int n) {
+    int i ;
 
+    acquire(&cons.lock);
+    for(i = 0 ; i < n ; i++) {
+        char c;
+        if(either_copyin(&c, user_src, src + i, 1) == -1)
+            break;
+        uartputc(c);
+    }
+    release(&cons.lock);
+
+    return i;
+}
+
+
+//
+// the console input interrupt handler.
+// uartintr() calls this for input character.
+// do erase/kill processing, append to cons.buf,
+// wake up consoleread() if a whole line has arrived.
+//
+void consoleintr(int c) {
+    acquire(&cons.lock);
+
+    switch (c) {
+    case C('P'):
+        procdump();
+        break;
+    default:
+        break;
+    }
+    release(&cons.lock);
+}
 void consoleinit(void){
     initlock(&cons.lock, "cons");
 
