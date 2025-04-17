@@ -22,6 +22,8 @@ void main() {
         trapinithart();     // install kernel trap vector
         plicinit();         // set up interrupt controller
         plicinithart();     // ask PLIC for device interrupts
+        binit();            // buffer cache
+        iinit();
         started = 1;     
     } else {
         while(started == 0)
