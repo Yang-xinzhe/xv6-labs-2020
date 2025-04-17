@@ -6,12 +6,19 @@ OBJS = \
 	$K/console.o \
 	$K/printf.o \
 	$K/uart.o \
+	$K/kalloc.o \
 	$K/spinlock.o \
+	$K/string.o \
 	$K/main.o \
+	$K/vm.o \
 	$K/proc.o \
 	$K/swtch.o \
+	$K/trampoline.o \
 	$K/trap.o \
+	$K/bio.o \
+	$K/sleeplock.o \
 	$K/kernelvec.o \
+	$K/plic.o \
 
 
 TOOLPREFIX = riscv64-unknown-elf-
@@ -76,10 +83,10 @@ clean:
 	rm -f $K/*.o $K/*.d $K/*.asm $K/*.sym $(TARGET_ELF)
 
 run: $(TARGET_ELF)
-	$(QEMU) -machine virt -bios none -kernel $(TARGET_ELF) -m 128M -smp 1 -nographic -serial mon:stdio
+	$(QEMU) -machine virt -bios none -kernel $(TARGET_ELF) -m 128M -smp 3 -nographic -serial mon:stdio
 
 debug: $(TARGET_ELF)
-	$(QEMU) -machine virt -bios none -kernel $(TARGET_ELF) -m 128M -smp 1 -nographic -serial mon:stdio -S -s
+	$(QEMU) -machine virt -bios none -kernel $(TARGET_ELF) -m 128M -smp 3 -nographic -serial mon:stdio -S -s
 
 .PHONY: all clean run debug
 
