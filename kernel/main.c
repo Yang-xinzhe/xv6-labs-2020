@@ -23,7 +23,7 @@ void main() {
         plicinit();         // set up interrupt controller
         plicinithart();     // ask PLIC for device interrupts
         binit();            // buffer cache
-        iinit();
+        iinit();            // inode cache
         started = 1;     
     } else {
         while(started == 0)
