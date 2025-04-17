@@ -1,6 +1,16 @@
+struct buf;
 struct spinlock;
 struct context;
 struct proc;
+struct sleeplock;
+
+// bio.c
+void            binit(void);
+struct buf*     bread(uint, uint);
+void            brelse(struct buf*);
+void            bwrite(struct buf*);
+void            bpin(struct buf*);
+void            bunpin(struct buf*);
 
 // console.c
 void            consoleinit(void);
@@ -67,6 +77,12 @@ void            uartintr(void);
 void            uartputc(int);
 void            uartputc_sync(int);
 int             uartgetc(void);
+
+// sleeplock.c
+void            acquiresleep(struct sleeplock*);
+void            releasesleep(struct sleeplock*);
+int             holdingsleep(struct sleeplock*);
+void            initsleeplock(struct sleeplock*, char*);
 
 // string.c
 int             memcmp(const void*, const void*, uint);
