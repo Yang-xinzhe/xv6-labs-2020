@@ -127,9 +127,7 @@ void uartputc_sync(int c){
 // in the transmit buffer, send it.
 // caller must hold uart_tx_lock.
 // called from both the top- and bottom-half.
-void
-uartstart()
-{
+void uartstart() {
   while(1){
     if(uart_tx_w == uart_tx_r){
       // transmit buffer is empty.
@@ -151,4 +149,33 @@ uartstart()
     
     WriteReg(THR, c);
   }
+}
+
+// read one input character from the UART.
+// return -1 if none is waiting.
+int uartgetc(void) {
+  if(ReadReg(LSR) & 0x01) {
+    // input data is ready
+    return ReadReg(RHR);
+  } else {
+    return -1;
+  }
+}
+
+// handle a uart interrupt, raised because input has
+// arrived, or the uart is ready for more output, or
+// both. called from trap.c.
+void uartintr(void) {
+  // read and process incoming characters.
+  while(1) {
+    int c = uartgetc();
+    if(c == -1)
+      break;
+    consoleintr(c);
+  }
+
+  // send buffered charactors
+  acquire(&uart_tx_lock);
+  uartstart();
+  release(&uart_tx_lock);
 }
