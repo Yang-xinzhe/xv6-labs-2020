@@ -68,6 +68,117 @@ struct proc* myproc() {
     return p;
 }
  
+int allocpid() {
+    int pid;
+
+    acquire(&pid_lock);
+    pid = nextpid;
+    nextpid = nextpid + 1;
+    release(&pid_lock);
+
+    return pid;
+}
+
+// Look in the process table for an UNUSED proc.
+// If found, initialize state required to run in the kernel,
+// and return with p->lock held.
+// If there are no free procs, or a memory allocation fails, return 0.
+static struct proc* allocproc(void) {
+    struct proc *p;
+
+    for(p = proc ; p < &proc[NPROC] ; p++) {
+        acquire(&p->lock);
+        if(p->state == UNUSED){
+            goto found;
+        } else {
+            release(&p->lock);
+        }
+    }
+    return 0;
+
+found:
+    p->pid = allocpid();
+
+    // Allocate a trapframe page
+    if((p->trapframe = (struct trapframe *)kalloc()) == 0){
+        release(&p->lock);
+        return 0;
+    }       
+
+    // An empty user page table
+    p->pagetable = proc_pagetable(p);
+    if(p->pagetable == 0) {
+        freeproc(p);
+        release(&p->lock);
+        return 0;
+    }
+
+    // Set up new context to start executing at forkret
+    // which returns to user space
+    memset(&p->context, 0, sizeof(p->context));
+    p->context.ra = (uint64)forkret;
+    p->context.sp = p->kstack + PGSIZE; // a stack with 4 KB
+}
+
+
+// free a proc structure and the data hanging from it,
+// including user pages.
+// p->lock must be held.
+static void freeproc(struct proc *p) {
+    if(p->trapframe)
+        kfree((void *)p->trapframe);
+    p->trapframe = 0;
+    if(p->pagetable)
+        proc_freepagetable(p->pagetable, p->sz);
+    p->pagetable = 0;
+    p->sz = 0;
+    p->pid = 0;
+    p->parent = 0;
+    p->name[0] = 0;
+    p->chan = 0;
+    p->killed = 0;
+    p->xstate = 0;
+    p->state = UNUSED;
+}
+
+// Create a user page table for a given process,
+// with no user memory, but with trampoline pages.
+pagetable_t proc_pagetable(struct proc *p) {
+    pagetable_t pagetable;
+
+    // An empty page table
+    pagetable = uvmcreate();
+    if(pagetable == 0)
+        return 0;
+
+    // map the trampoline code (for system call return)
+    // at the highest user virtual address
+    // only the supervisor uses it, on the way
+    // to/from user space, so not PTE_U
+    if(mappages(pagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X) < 0){
+        uvmfree(pagetable, 0);
+        return 0;
+    }
+
+    // map the trapframe just below TRAMPOLINE, for trampoline.S
+    if(mappages(pagetable, TRAPFRAME, PGSIZE, (uint64)(p->trapframe), PTE_R | PTE_W) < 0) {
+        uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+        uvmfree(pagetable, 0);
+        return 0;
+    }
+
+    return pagetable;
+}
+
+// Free a process's page table, and free the
+// physical memory it refers to.
+void proc_freepagetable(pagetable_t pagetable, uint64 sz) {
+    uvmunmap(pagetable, TRAMPOLINE, 1, 0);
+    uvmunmap(pagetable, TRAPFRAME, 1, 0);
+    uvmfree(pagetable, sz);
+}
+
+
 // Atomically release lock and sleep on chan.
 // Reacquires lock when awakened.
 void sleep(void *chan, struct spinlock *lk) {
@@ -146,4 +257,45 @@ void yield(void) {
     p->state = RUNNABLE;
     sched();
     release(&p->lock);
+}
+
+
+// Copy from either a user address, or kernel address,
+// depending on usr_src.
+// Returns 0 on success, -1 on error.
+int either_copyin(void *dst, int user_src, uint64 src, uint64 len) {
+    struct proc *p = myproc();
+    if(user_src) {
+        return copyin(p->pagetable, dst, src, len);
+    } else {
+        memmove(dst, (char *)src, len);
+        return 0;
+    }
+}
+
+
+// Print a process listing to console.  For debugging.
+// Runs when user types ^P on console.
+// No lock to avoid wedging a stuck machine further.
+void procdump(void) {
+    static char *states[] = {
+        [UNUSED]    "unused",
+        [SLEEPING]  "sleep",
+        [RUNNABLE]  "runable",
+        [RUNNING]   "running",
+        [ZOMBIE]    "zombie"
+    };
+    struct proc *p;
+    char *state;
+
+    printf("\n");
+    for(p = proc; p < &proc[NPROC]; p++) {
+        if(p->state == UNUSED)
+            continue;
+        if(p->state >= 0 && p->state < NELEM(states) && states[p->state])
+            state = states[p->state];
+        else
+            state = "???";
+        printf("%d %s %s\n", p->pid, state, p->name);
+    }
 }
