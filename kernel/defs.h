@@ -1,8 +1,10 @@
 struct spinlock;
 struct context;
+struct proc;
 
 // console.c
 void            consoleinit(void);
+void            consoleintr(int);
 void            consputc(int);
 
 // kalloc.c
@@ -61,8 +63,10 @@ void            usertrapret(void);
 
 // uart.c
 void            uartinit(void);
+void            uartintr(void);
 void            uartputc(int);
 void            uartputc_sync(int);
+int             uartgetc(void);
 
 // string.c
 int             memcmp(const void*, const void*, uint);
@@ -98,3 +102,6 @@ void            plicinit(void);
 void            plicinithart(void);
 int             plic_claim(void);
 void            plic_complete(int);
+
+// number of elements in fixed-size array
+#define NELEM(x) (sizeof(x)/sizeof((x)[0]))
