@@ -24,6 +24,7 @@ void main() {
         plicinithart();     // ask PLIC for device interrupts
         binit();            // buffer cache
         iinit();            // inode cache
+        fileinit();         // file table
         started = 1;     
     } else {
         while(started == 0)
