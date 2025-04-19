@@ -118,6 +118,8 @@ found:
     memset(&p->context, 0, sizeof(p->context));
     p->context.ra = (uint64)forkret;
     p->context.sp = p->kstack + PGSIZE; // a stack with 4 KB
+
+    return p;
 }
 
 
@@ -211,6 +213,207 @@ void sleep(void *chan, struct spinlock *lk) {
   }
 }
 
+
+// a user program that calls exec("/init")
+// od -t xC initcode
+uchar initcode[] = {
+  0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
+  0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x35, 0x02,
+  0x93, 0x08, 0x70, 0x00, 0x73, 0x00, 0x00, 0x00,
+  0x93, 0x08, 0x20, 0x00, 0x73, 0x00, 0x00, 0x00,
+  0xef, 0xf0, 0x9f, 0xff, 0x2f, 0x69, 0x6e, 0x69,
+  0x74, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00,
+  0x00, 0x00, 0x00, 0x00
+};
+
+// # 准备exec系统调用的两个参数
+// auipc a0, 0      # a0 = PC
+// addi  a0, a0, 37 # a0指向"/init"（第一个参数：路径）
+// auipc a1, 0      # a1 = PC
+// addi  a1, a1, 35 # a1指向argv（第二个参数：参数数组）
+// li    a7, 7      # 设置系统调用号为SYS_exec (7)
+// ecall            # 执行系统调用
+// # 如果exec失败（正常不会失败）
+// li    a7, 2      # 设置系统调用号为SYS_exit (2)
+// ecall            # 执行退出系统调用
+
+// Set up first user process.
+void userinit(void) {
+    struct proc *p;
+
+    p = allocproc();
+    initproc = p;
+
+    // allocate one user page and copy init's instructions
+    // and data into it
+    uvminit(p->pagetable, initcode, sizeof(initcode));
+    p->sz = PGSIZE;
+
+    // prepare for the very first "return" from kernel to user.
+    p->trapframe->epc = 0;      // user program counter
+    p->trapframe->sp = PGSIZE;  // user stack pointer
+
+    safestrcpy(p->name, "initcode", sizeof(p->name));
+    p->cwd = namei("/");
+
+    p->state = RUNNABLE;
+
+    release(&p->lock);
+}
+
+
+// Grow or shrink user memory by n bytes.
+// Return 0 on success, -1 on failure.
+int growproc(int n) {
+    uint sz;
+    struct proc *p = myproc();
+
+    sz = p->sz;
+    if(n > 0) {
+        if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+            return -1;
+        }
+    } else if (n < 0) {
+        sz = uvmdealloc(p->pagetable, sz, sz + n);
+    }
+    p->sz = sz;
+    return 0;
+}
+
+// Create a new process, copying the parent.
+// Sets up child kernel stack to return as if from fork() system call.
+int fork(void) {
+    int i, pid;
+    struct proc *np;
+    struct proc *p = myproc();
+
+    // Allocate process
+    if((np = allocproc()) == 0) {
+        return -1;
+    }
+
+    // Copy user memory from parent to child.
+    if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0) {
+        freeproc(np);
+        release(&np->lock);
+        return -1;
+    }
+    np->sz = p->sz;
+
+    np->parent = p;
+
+    // copy saved user registers
+    *(np->trapframe) = *(p->trapframe);
+
+    // Cause fork to return 0 in child
+    np->trapframe->a0 = 0;
+
+    // increment reference counts on open file descriptors.
+    for(i = 0 ; i < NOFILE ; i++) {
+        if(p->ofile[i])
+            np->ofile[i] = filedup(p->ofile[i]);
+    }
+    np->cwd = idup(p->cwd);
+
+    safestrcpy(np->name, p->name, sizeof(p->name));
+
+    pid = np->pid;
+
+    np->state = RUNNABLE;
+
+    release(&np->lock);
+
+    return pid;
+}
+
+// Pass p's abandoned children to init.
+// Caller must hold p->lock.
+void reparent(struct proc *p) {
+    struct proc *pp;
+
+    for(pp = proc ; pp < &proc[NPROC] ; pp++) {
+        // this code uses pp->parent without holding pp->lock
+        // acquiring the lock first could cause a deadlock
+        // if pp or a child of pp were also in exit()
+        // and about to try to lock p.
+        if(pp->parent == p) {
+            // pp->parent can't change between the check and the acquire()
+            // because only the parent changes it, and we're the parent/
+            acquire(&pp->lock);
+            pp->parent = initproc;
+            // we should wake up init here, but that would require
+            // initproc->lock, which would be a deadlock, since we hold
+            // the lock on one of init's children (pp). this is why
+            // exit() always wakes init (before acquiring any locks).
+            release(&pp->lock);
+        }
+    }
+}
+
+// Exit the current process.  Does not return.
+// An exited process remains in the zombie state
+// until its parent calls wait().
+void exit(int status) {
+    struct proc *p = myproc();
+
+    if(p == initproc)
+        panic("init exiting");
+
+    // Close all open file.
+    for(int fd = 0 ; fd < NOFILE ; fd++) {
+        if(p->ofile[fd]) {
+            struct file* f = p->ofile[fd];
+            fileclose(f);
+            p->ofile[fd] = 0;
+        }
+    }
+
+    begin_op();
+    iput(p->cwd);
+    end_op();
+    p->cwd = 0;
+
+    // we might re-parent a child to init. we can't be precise about
+    // waking up init, since we can't acquire its lock once we've
+    // acquired any other proc lock. so wake up init whether that's
+    // necessary or not. init may miss this wakeup, but that seems
+    // harmless.
+    acquire(&initproc->lock);
+    wakeup1(initproc);
+    release(&initproc->lock);
+
+    // grab a copy of p->parent, to ensure that we unlock the same
+    // parent we locked. in case our parent gives us away to init while
+    // we're waiting for the parent lock. we may then race with an
+    // exiting parent, but the result will be a harmless spurious wakeup
+    // to a dead or wrong process; proc structs are never re-allocated
+    // as anything else.
+    acquire(&p->lock);
+    struct proc *original_parent = p->parent;
+    release(&p->lock);
+
+    // we need the parent's lock in order to wake it up from wait()
+    // the parent-then-child rule says we have to lock it first.
+    acquire(&original_parent->lock);
+
+    acquire(&p->lock);
+
+    // Give any children to init.
+    reparent(p);
+
+    // Parent might be sleeping in wait()
+    wakeup1(original_parent);
+
+    p->xstate = status;
+    p->state = ZOMBIE;
+
+    release(&original_parent->lock);
+
+    // Jump into the scheduler, never to return
+    sched();
+    panic("zombie exit");
+}
+
 // Wake up all processes sleeping on chan.
 // Must be called without any p->lock.
 void wakeup(void *chan){
@@ -224,6 +427,81 @@ void wakeup(void *chan){
         release(&p->lock);
     }
 }
+
+
+// Wake up p if it is sleeping in wait(); used by exit().
+// Caller must hold p->lock
+static void wakeup1(struct proc *p) {
+    if(!holding(&p->lock))
+        panic("wakeup1");
+    if(p->chan == p && p->state == SLEEPING)
+        p->state = RUNNABLE;
+}
+
+// Kill the process with the given pid.
+// The victim won't exit until it tries to return
+// to user space (see usertrap() in trap.c).
+int kill(int pid) {
+    struct proc *p;
+
+    for(p = proc ; p < &proc[NPROC] ; p++) {
+        acquire(&p->lock);
+        if(p->pid == pid) {
+            p->killed = 1;
+            if(p->state == SLEEPING) {
+                // Wake process from sleep()
+                p->state = RUNNABLE;
+            }
+            release(&p->lock);
+            return 0;
+        }
+        release(&p->lock);
+    }
+    return -1;
+}
+
+// Per-CPU process scheduler.
+// Each CPU calls scheduler() after setting itself up.
+// Scheduler never returns.  It loops, doing:
+//  - choose a process to run.
+//  - swtch to start running that process.
+//  - eventually that process transfers control
+//    via swtch back to the scheduler.
+void scheduler(void) {
+    struct proc *p;
+    struct cpu *c = mycpu();
+
+    c->proc = 0;
+    for(;;) {
+        // Avoid deadlock by ensuring that devices can interrupt.
+        intr_on();
+
+        int found = 0;
+        for(p = proc ; p < &proc[NPROC] ; p++) {
+            acquire(&p->lock);
+            if(p->state == RUNNABLE) {
+                // Switch to chosen process. It is the process's job
+                // to release its lock and then reacquire it
+                // before jumping back to us.
+                p->state = RUNNING;
+                c->proc = p;
+                swtch(&c->context, &p->context);
+
+                // Process is done running for now.
+                // It should have changed its p->state before coming back
+                c->proc = 0;
+
+                found = 1;
+            }
+            release(&p->lock);
+        }
+        if(found == 0) {
+            intr_on();
+            asm volatile("wfi");
+        }
+    }
+}
+
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
@@ -259,6 +537,38 @@ void yield(void) {
     release(&p->lock);
 }
 
+
+// A fork child's very first scheduling by schedler()
+// will swtch to forkret
+void forkret(void) {
+    static int first = 1;
+
+    // Still holding p->lock from scheduler.
+    release(&myproc()->lock);
+
+    if(first) {
+        // File system initialization must be run in the context of a 
+        // regular process (e.g., because it calls sleep), and thus cannot
+        // be run from main().
+        first = 0;
+        fsinit(ROOTDEV);
+    }
+
+    usertrapret();
+}
+
+// Copy to either a user address, or kernel address,
+// depending on usr_dst.
+// Returns 0 on success, -1 on error
+int either_copyout(int user_dst, uint64 dst, void *src, uint64 len) {
+    struct proc *p = myproc();
+    if(user_dst) {
+        return copyout(p->pagetable, dst, src, len);
+    } else {
+        memmove((char *)dst, src, len);
+        return 0;
+    }
+}
 
 // Copy from either a user address, or kernel address,
 // depending on usr_src.
