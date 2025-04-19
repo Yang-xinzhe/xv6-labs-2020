@@ -15,10 +15,15 @@ OBJS = \
 	$K/swtch.o \
 	$K/trampoline.o \
 	$K/trap.o \
+	$K/syscall.o \
 	$K/bio.o \
+	$K/fs.o \
+	$K/log.o \
 	$K/sleeplock.o \
+	$K/file.o \
 	$K/kernelvec.o \
 	$K/plic.o \
+	$K/virtio_disk.o \
 
 
 TOOLPREFIX = riscv64-unknown-elf-
