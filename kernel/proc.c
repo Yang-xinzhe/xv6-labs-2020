@@ -414,6 +414,54 @@ void exit(int status) {
     panic("zombie exit");
 }
 
+// Wait for a child process to exit and return its pid;
+// Return -1 if this process has no children
+int wait(uint64 addr) {
+    struct proc *np;
+    int havekids, pid;
+    struct proc *p = myproc();
+
+    // hold p->lock for the whole time to avoid lost
+    // wakeups from a child's exit()
+    acquire(&p->lock);
+
+    for(;;) {
+        // Scan through table looking for exited children
+        havekids = 0;
+        for(np = proc ; np < &proc[NPROC] ; np++) {
+            // this code uses np->parent without holding np->lock.
+            // acquiring the lock firs would cause a deadlock,
+            // since np might be an ancestor, and we already hold p->lock.
+            if(np->parent == p) {
+                havekids = 1;
+                if(np->state == ZOMBIE){
+                    // Found one.
+                    pid = np->pid;
+                    if(addr != 0 && copyout(p->pagetable, addr, (char *)&np->xstate, sizeof(np->xstate)) < 0) {
+                        release(&np->lock);
+                        release(&p->lock);
+                        return -1;
+                    }
+                    freeproc(np);
+                    release(&np->lock);
+                    release(&p->lock);
+                    return pid;
+                }
+                release(&np->lock);
+            }
+        }
+
+        // No point waiting if we don't have any children.
+        if(!havekids || p->killed) {
+            release(&p->lock);
+            return -1;
+        }
+
+        // wait for a child to exit
+        sleep(p, &p->lock); // DOC: wait-sleep
+    }
+}
+
 // Wake up all processes sleeping on chan.
 // Must be called without any p->lock.
 void wakeup(void *chan){
