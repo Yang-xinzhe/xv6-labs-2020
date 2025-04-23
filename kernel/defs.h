@@ -1,11 +1,12 @@
 struct buf;
-struct spinlock;
 struct context;
+struct file;
+struct inode;
 struct pipe;
 struct proc;
-struct inode;
-struct stat;
+struct spinlock;
 struct sleeplock;
+struct stat;
 struct superblock;
 
 // bio.c
@@ -20,6 +21,9 @@ void            bunpin(struct buf*);
 void            consoleinit(void);
 void            consoleintr(int);
 void            consputc(int);
+
+// exec.c
+int             exec(char*, char**);
 
 // file.c
 struct file*    filealloc(void);
@@ -50,10 +54,32 @@ void            stati(struct inode*, struct stat*);
 int             writei(struct inode*, int, uint64, uint, uint);
 void            itrunc(struct inode*);
 
+// ramdisk.c
+void            ramdiskinit(void);
+void            ramdiskintr(void);
+void            ramdiskrw(struct buf*);
+
 // kalloc.c
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+
+// log.c
+void            initlog(int, struct superblock*);
+void            log_write(struct buf*);
+void            begin_op(void);
+void            end_op(void);
+
+// pipe.c
+int             pipealloc(struct file**, struct file**);
+void            pipeclose(struct pipe*, int);
+int             piperead(struct pipe*, uint64, int);
+int             pipewrite(struct pipe*, uint64, int);
+
+// printf.c
+void            printf(char*, ...);
+void            panic(char*) __attribute__((noreturn));
+void            printfinit(void);
 
 // proc.c
 int             cpuid(void);
@@ -79,26 +105,8 @@ int             either_copyout(int user_dst, uint64 dst, void *src, uint64 len);
 int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 
-// log.c
-void            initlog(int, struct superblock*);
-void            log_write(struct buf*);
-void            begin_op(void);
-void            end_op(void);
-
-// pipe.c
-int             pipealloc(struct file**, struct file**);
-void            pipeclose(struct pipe*, int);
-int             piperead(struct pipe*, uint64, int);
-int             pipewrite(struct pipe*, uint64, int);
-
-// printf.c
-void            printf(char*, ...);
-void            panic(char*) __attribute__((noreturn));
-void            printfinit(void);
-
 // swtch.S
 void            swtch(struct context*, struct context*);
-
 
 // spinlock.c
 void            acquire(struct spinlock*);
@@ -107,6 +115,21 @@ void            initlock(struct spinlock*, char*);
 void            release(struct spinlock*);
 void            push_off(void);
 void            pop_off(void);
+
+// sleeplock.c
+void            acquiresleep(struct sleeplock*);
+void            releasesleep(struct sleeplock*);
+int             holdingsleep(struct sleeplock*);
+void            initsleeplock(struct sleeplock*, char*);
+
+// string.c
+int             memcmp(const void*, const void*, uint);
+void*           memmove(void*, const void*, uint);
+void*           memset(void*, int, uint);
+char*           safestrcpy(char*, const char*, int);
+int             strlen(const char*);
+int             strncmp(const char*, const char*, uint);
+char*           strncpy(char*, const char*, int);
 
 // syscall.c
 int             argint(int, int*);
@@ -129,22 +152,6 @@ void            uartintr(void);
 void            uartputc(int);
 void            uartputc_sync(int);
 int             uartgetc(void);
-
-// sleeplock.c
-void            acquiresleep(struct sleeplock*);
-void            releasesleep(struct sleeplock*);
-int             holdingsleep(struct sleeplock*);
-void            initsleeplock(struct sleeplock*, char*);
-
-// string.c
-int             memcmp(const void*, const void*, uint);
-void*           memmove(void*, const void*, uint);
-void*           memset(void*, int, uint);
-char*           safestrcpy(char*, const char*, int);
-int             strlen(const char*);
-int             strncmp(const char*, const char*, uint);
-char*           strncpy(char*, const char*, int);
-
 
 // vm.c
 void            kvminit(void);
