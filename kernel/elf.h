@@ -4,7 +4,7 @@
 #define ELF_MAGIC 0x464C457FU // "\x7FELF" in little endian
 
 // ELF file header - appears at the start of every ELF file
-struct elfdr {
+struct elfhdr {
     uint magic;      // Must equal ELF_MAGIC to be valid ELF file
     uchar elf[12];   // ELF identification bytes
     ushort type;     // Object file type (executable, shared object, etc)
@@ -35,7 +35,7 @@ struct proghdr {
 };
 
 // Value for Proghdr type
-#define ELF_PROG_LOAD           // Program section type - indicates a loadable segment
+#define ELF_PROG_LOAD           1  // Program section type - indicates a loadable segment
 
 // Flag bits for Proghdr flags
 #define ELF_PROG_FLAG_EXEC  1   // Executable segment  01
