@@ -75,7 +75,7 @@ static struct buf* bget(uint dev, uint blockno){
         if(b->refcnt == 0) {
             b->dev = dev;
             b->blockno = blockno;
-            b->vaild = 0;
+            b->valid = 0;
             b->refcnt = 1;
             release(&bcache.lock);
             acquiresleep(&b->lock);
@@ -90,9 +90,9 @@ struct buf* bread(uint dev, uint blockno) {
     struct buf *b;
 
     b = bget(dev, blockno);
-    if(!b->vaild) {
+    if(!b->valid) {
         virtio_disk_rw(b, 0);
-        b->vaild = 1;
+        b->valid = 1;
     }
     return b;
 }

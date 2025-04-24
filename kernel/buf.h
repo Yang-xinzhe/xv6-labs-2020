@@ -1,5 +1,5 @@
 struct buf {
-    int vaild; // has data been read from disk?
+    int valid; // has data been read from disk?
     int disk;
     uint dev;
     uint blockno;
