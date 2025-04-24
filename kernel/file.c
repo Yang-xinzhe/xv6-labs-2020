@@ -67,8 +67,7 @@ void fileclose(struct file *f) {
     release(&ftable.lock);
 
     if(ff.type == FD_PIPE) {
-        // TODO: recover pipe
-        // pipeclose(ff.pipe, ff.writable);
+        pipeclose(ff.pipe, ff.writable);
         printf("file.c pipeclose(ff.pipe, ff.writable);");
     } else if(ff.type == FD_INODE || ff.type == FD_DEVICE) {
         begin_op();
