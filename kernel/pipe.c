@@ -58,7 +58,7 @@ void pipeclose(struct pipe *pi, int writeable) {
     acquire(&pi->lock);
     if(writeable) {
         pi->writeopen = 0;
-        wakeup(&pi->readopen);
+        wakeup(&pi->nread);
     } else {
         pi->readopen = 0;
         wakeup(&pi->nwrite);
