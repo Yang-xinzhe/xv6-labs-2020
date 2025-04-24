@@ -32,7 +32,7 @@ void trapinithart(void) {
 void usertrap(void) {
     int which_dev = 0;
 
-    if((r_sstatus() && SSTATUS_SPP) != 0)
+    if((r_sstatus() & SSTATUS_SPP) != 0)
         panic("usertrap: not from user mode");
 
     // send interrupts and exceptions to kerneltrap(),
@@ -118,7 +118,7 @@ void usertrapret(void) {
     // switches to the user page table, restores user registers.
     // and switches to user mode with sret.
     uint64 fn = TRAMPOLINE + (userret - trampoline);
-    ((void (*)(uint64, uint64))fn)(TRAMPOLINE, satp);
+    ((void (*)(uint64, uint64))fn)(TRAPFRAME, satp);
 }
 
 // interrupts and exceptions from kernel code go here via kernelvec,
