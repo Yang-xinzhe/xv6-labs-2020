@@ -68,7 +68,6 @@ void fileclose(struct file *f) {
 
     if(ff.type == FD_PIPE) {
         pipeclose(ff.pipe, ff.writable);
-        printf("file.c pipeclose(ff.pipe, ff.writable);");
     } else if(ff.type == FD_INODE || ff.type == FD_DEVICE) {
         begin_op();
         iput(ff.ip);
