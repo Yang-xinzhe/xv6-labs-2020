@@ -135,6 +135,7 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 UPROGS=\
 	$U/_init\
 	$U/_sh \
+	$U/_helloworld \
 
 
 ifeq ($(LAB),syscall)
